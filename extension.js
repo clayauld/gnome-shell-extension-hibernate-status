@@ -178,6 +178,92 @@ export default class HibernateButtonExtension extends Extension {
         }
     }
 
+    _getMenuContext() {
+        const quickSettings = Main.panel.statusArea.quickSettings;
+        if (quickSettings?._system?._systemItem?.menu) {
+            return {
+                type: 'quick-settings',
+                systemMenu: quickSettings._system,
+                menu: quickSettings._system._systemItem.menu,
+            };
+        }
+
+        const aggregateMenu = Main.panel.statusArea.aggregateMenu;
+        if (aggregateMenu) {
+            const legacyCandidates = [
+                aggregateMenu._systemMenu,
+                aggregateMenu._system,
+            ];
+
+            for (const candidate of legacyCandidates) {
+                if (candidate?.menu) {
+                    return {
+                        type: 'aggregate-menu',
+                        systemMenu: candidate,
+                        menu: candidate.menu,
+                    };
+                }
+            }
+        }
+
+        return null;
+    }
+
+    _initMenuContext() {
+        const context = this._getMenuContext();
+        if (!context)
+            return false;
+
+        this._shellMenuType = context.type;
+        this.systemMenu = context.systemMenu;
+        this._menu = context.menu;
+
+        return true;
+    }
+
+    _getMenuItems() {
+        if (!this._menu || typeof this._menu._getMenuItems !== 'function')
+            return [];
+
+        return this._menu._getMenuItems();
+    }
+
+    _menuItemLabelEquals(menuItem, label) {
+        if (!menuItem?.label?.get_text)
+            return false;
+
+        return menuItem.label.get_text() === label;
+    }
+
+    _findInsertPosition() {
+        const items = this._getMenuItems();
+
+        const beforeLabels = [
+            _('Power Off…'),
+            _('Power Off / Log Out…'),
+            _('Power Off / Log Out'),
+            _('Power Off'),
+        ];
+
+        for (const label of beforeLabels) {
+            const idx = items.findIndex(item => this._menuItemLabelEquals(item, label));
+            if (idx !== -1)
+                return idx;
+        }
+
+        if (typeof this._menu?.numMenuItems === 'number')
+            return this._menu.numMenuItems;
+
+        return items.length;
+    }
+
+    _closeSystemMenu() {
+        if (!this._menu)
+            return;
+
+        this._menu.itemActivated();
+    }
+
     _updateHaveHibernate() {
         this._loginManagerCanHibernate(result => {
             log(`Able to hibernate: ${result}`);
@@ -219,8 +305,11 @@ export default class HibernateButtonExtension extends Extension {
 
     _updateDefaults() {
         console.log("Update defaults");
-        let menuItems = this.systemMenu._systemItem.menu._getMenuItems()
+        let menuItems = this._getMenuItems();
         for (let menuItem of menuItems) {
+            if (!menuItem?.label?.get_text)
+                continue;
+
             console.log(menuItem.label.get_text())
             if ( menuItem.label.get_text() === _('Suspend') ) {
                 console.log(`Show suspend button: ${this._setting.get_boolean('show-suspend')}`)
@@ -238,7 +327,7 @@ export default class HibernateButtonExtension extends Extension {
     }
 
     _onHibernateClicked() {
-        this.systemMenu._systemItem.menu.itemActivated();
+        this._closeSystemMenu();
 
         if (this._setting.get_boolean('show-hibernate-dialog')) {
             let DialogContent = {
@@ -271,7 +360,7 @@ export default class HibernateButtonExtension extends Extension {
     }
 
     _onHybridSleepClicked() {
-        this.systemMenu._systemItem.menu.itemActivated();
+        this._closeSystemMenu();
 
         if (this._setting.get_boolean('show-hybrid-sleep-dialog')) {
             let DialogContent = {
@@ -304,7 +393,7 @@ export default class HibernateButtonExtension extends Extension {
     }
 
     _onSuspendThenHibernateClicked() {
-        this.systemMenu._systemItem.menu.itemActivated();
+        this._closeSystemMenu();
 
         if (this._setting.get_boolean('show-suspend-then-hibernate-dialog')) {
             let DialogContent = {
@@ -437,7 +526,10 @@ export default class HibernateButtonExtension extends Extension {
         this._setting = this.getSettings()
         this._checkRequirements();
         this._loginManager = LoginManager.getLoginManager();
-        this.systemMenu = Main.panel.statusArea.quickSettings._system;
+        if (!this._menu && !this._initMenuContext()) {
+            this._queueModifySystemItem();
+            return;
+        }
         this._hibernateMenuItem = new PopupMenu.PopupMenuItem(__('Hibernate'));
         this._hibernateMenuItemId = this._hibernateMenuItem.connect(
             'activate',
@@ -460,23 +552,22 @@ export default class HibernateButtonExtension extends Extension {
             () => this._onSuspendThenHibernateClicked()
         );
 
-        let afterSuspendPosition =
-            this.systemMenu._systemItem.menu.numMenuItems - 5;
+        let insertPosition = this._findInsertPosition();
 
-        this.systemMenu._systemItem.menu.addMenuItem(
+        this._menu.addMenuItem(
             this._hybridSleepMenuItem,
-            afterSuspendPosition
+            insertPosition++
         );
-        this.systemMenu._systemItem.menu.addMenuItem(
+        this._menu.addMenuItem(
             this._hibernateMenuItem,
-            afterSuspendPosition
+            insertPosition++
         );
-        this.systemMenu._systemItem.menu.addMenuItem(
+        this._menu.addMenuItem(
             this._suspendThenHibernateMenuItem,
-            afterSuspendPosition
+            insertPosition++
         );
 
-        this._menuOpenStateChangedId = this.systemMenu._systemItem.menu.connect(
+        this._menuOpenStateChangedId = this._menu.connect(
             'open-state-changed',
             (menu, open) => {
                 if (!open) return;
@@ -490,7 +581,7 @@ export default class HibernateButtonExtension extends Extension {
 
     _queueModifySystemItem() {
         this.sourceId = GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
-            if (!Main.panel.statusArea.quickSettings._system)
+            if (!this._initMenuContext())
                 return GLib.SOURCE_CONTINUE;
 
             this._modifySystemItem();
@@ -499,7 +590,9 @@ export default class HibernateButtonExtension extends Extension {
     }
 
     enable() {
-        if (!Main.panel.statusArea.quickSettings._system) {
+        this.systemMenu = null;
+        this._menu = null;
+        if (!this._initMenuContext()) {
             this._queueModifySystemItem();
         } else {
             this._modifySystemItem();
@@ -509,7 +602,7 @@ export default class HibernateButtonExtension extends Extension {
     disable() {
         this._setting = null;
         if (this._menuOpenStateChangedId) {
-            this.systemMenu._systemItem.menu.disconnect(
+            this._menu?.disconnect(
                 this._menuOpenStateChangedId
             );
             this._menuOpenStateChangedId = 0;
@@ -549,6 +642,9 @@ export default class HibernateButtonExtension extends Extension {
             GLib.Source.remove(this.sourceId);
             this.sourceId = null;
         }
+
+        this._menu = null;
+        this.systemMenu = null;
 
         if (this.can_suspend_then_hibernate_sourceID) {
             GLib.Source.remove(this.can_suspend_then_hibernate_sourceID);
