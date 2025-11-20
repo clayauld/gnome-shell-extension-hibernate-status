@@ -443,28 +443,150 @@ class HibernateButtonExtension extends GObject.Object {
             // GNOME 43+
             this._targetMenu = Main.panel.statusArea.quickSettings._system._systemItem.menu;
         } else if (Main.panel.statusArea.aggregateMenu) {
-             // GNOME 42: Search for the "Power Off / Log Out" submenu
-             let foundSubMenu = false;
-             let menuItems = Main.panel.statusArea.aggregateMenu.menu._getMenuItems();
-             for (let item of menuItems) {
-                 if (item instanceof PopupMenu.PopupSubMenuMenuItem) {
-                    // Check label content roughly to support English/localization if possible,
-                    // or just check if it has a menu and looks right.
-                    // Usually labeled "Power Off / Log Out" or similar.
-                    // We can search for items inside it to confirm?
-                    // Pop!_OS might have "Power Off"
-                    let labelText = item.label.get_text();
-                    if (labelText.includes("Power Off") || labelText.includes(_("Power Off"))) {
-                        this._targetMenu = item.menu;
-                        foundSubMenu = true;
-                        break;
+            // GNOME 42: Search for the "Power Off / Log Out" submenu
+            // Enhanced detection for Pop_OS and other distributions
+            let aggregateMenu = Main.panel.statusArea.aggregateMenu.menu;
+
+            // Normalize helper to make string comparisons resilient
+            function normalizeText(text) {
+                if (!text) return '';
+                return text
+                    .replace(/\u2026/g, '...')
+                    .replace(/…/g, '...')
+                    .replace(/\.\.\./g, '...')
+                    .toLowerCase()
+                    .replace(/[^a-z]/g, ' ')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+            }
+
+            function getLabelText(item) {
+                if (!item || !item.label || typeof item.label.get_text !== 'function')
+                    return '';
+                return item.label.get_text();
+            }
+
+            function getClassName(item) {
+                if (!item || !item.constructor || !item.constructor.name)
+                    return 'Unknown';
+                return item.constructor.name;
+            }
+
+            function countPowerMenuItems(menu) {
+                if (!menu || typeof menu._getMenuItems !== 'function')
+                    return 0;
+                let count = 0;
+                let items = menu._getMenuItems();
+                for (let subItem of items) {
+                    let normalized = normalizeText(getLabelText(subItem));
+                    if (powerMenuLabels.includes(normalized))
+                        count += 1;
+                }
+                return count;
+            }
+
+            function describeEntry(item, depth, hasSubMenu, hasChildren) {
+                let indent = '';
+                for (let i = 0; i < depth; i++)
+                    indent += '  ';
+                let label = getLabelText(item);
+                debugMenuEntries.push(
+                    `${indent}${getClassName(item)}("${label}")` +
+                        `[submenu=${hasSubMenu ? 'yes' : 'no'}, children=${
+                            hasChildren ? 'yes' : 'no'
+                        }]`
+                );
+            }
+
+            let powerKeywordLabels = [
+                'Power Off',
+                _('Power Off'),
+                'Log Out',
+                _('Log Out'),
+                'Log Off',
+                _('Log Off'),
+            ].map(normalizeText);
+
+            let powerMenuLabels = [
+                _('Suspend'),
+                _('Power Off…'),
+                _('Power Off...'),
+                _('Restart…'),
+                _('Restart...'),
+                _('Log Out'),
+                _('Log Off'),
+            ].map(normalizeText);
+
+            let debugMenuEntries = [];
+
+            const findPowerSubmenu = (container, depth) => {
+                if (!container || typeof container._getMenuItems !== 'function')
+                    return null;
+
+                let items = container._getMenuItems();
+                for (let item of items) {
+                    let hasSubMenu =
+                        item &&
+                        item.menu &&
+                        typeof item.menu._getMenuItems === 'function';
+                    let hasChildren =
+                        item &&
+                        item !== container &&
+                        typeof item._getMenuItems === 'function';
+
+                    describeEntry(item, depth, hasSubMenu, hasChildren);
+
+                    if (hasSubMenu) {
+                        let labelText = getLabelText(item);
+                        let normalizedLabel = normalizeText(labelText);
+                        let matchedPowerItems = countPowerMenuItems(item.menu);
+                        let labelMatches = powerKeywordLabels.includes(
+                            normalizedLabel
+                        );
+
+                        if (matchedPowerItems >= 2) {
+                            log(
+                                `Hibernate Button: Found Power Off / Log Out submenu: "${
+                                    labelText || '<no label>'
+                                }" (matched ${matchedPowerItems} power items)`
+                            );
+                            return item.menu;
+                        } else if (labelMatches) {
+                            log(
+                                `Hibernate Button: Submenu "${labelText}" matched keywords but only matched ${matchedPowerItems} power items`
+                            );
+                        }
                     }
-                 }
-             }
-             if (!foundSubMenu) {
-                 // Fallback to root menu if submenu not found
-                 this._targetMenu = Main.panel.statusArea.aggregateMenu.menu;
-             }
+
+                    if (hasSubMenu) {
+                        let nestedMenu = findPowerSubmenu(item.menu, depth + 1);
+                        if (nestedMenu)
+                            return nestedMenu;
+                    }
+
+                    if (hasChildren) {
+                        let nested = findPowerSubmenu(item, depth + 1);
+                        if (nested)
+                            return nested;
+                    }
+                }
+
+                return null;
+            };
+
+            let powerSubMenu = findPowerSubmenu(aggregateMenu, 0);
+
+            if (powerSubMenu) {
+                this._targetMenu = powerSubMenu;
+            } else {
+                // Fallback to root menu if submenu not found
+                log(
+                    `Hibernate Button: Could not find Power Off / Log Out submenu, falling back to root menu. Items inspected: ${debugMenuEntries.join(
+                        ', '
+                    )}`
+                );
+                this._targetMenu = aggregateMenu;
+            }
         } else {
             // Fallback or error
             log("Hibernate Button: Could not find system menu");
