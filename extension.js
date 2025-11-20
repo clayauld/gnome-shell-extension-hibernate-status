@@ -443,8 +443,28 @@ class HibernateButtonExtension extends GObject.Object {
             // GNOME 43+
             this._targetMenu = Main.panel.statusArea.quickSettings._system._systemItem.menu;
         } else if (Main.panel.statusArea.aggregateMenu) {
-             // GNOME 42
-            this._targetMenu = Main.panel.statusArea.aggregateMenu.menu;
+             // GNOME 42: Search for the "Power Off / Log Out" submenu
+             let foundSubMenu = false;
+             let menuItems = Main.panel.statusArea.aggregateMenu.menu._getMenuItems();
+             for (let item of menuItems) {
+                 if (item instanceof PopupMenu.PopupSubMenuMenuItem) {
+                    // Check label content roughly to support English/localization if possible,
+                    // or just check if it has a menu and looks right.
+                    // Usually labeled "Power Off / Log Out" or similar.
+                    // We can search for items inside it to confirm?
+                    // Pop!_OS might have "Power Off"
+                    let labelText = item.label.get_text();
+                    if (labelText.includes("Power Off") || labelText.includes(_("Power Off"))) {
+                        this._targetMenu = item.menu;
+                        foundSubMenu = true;
+                        break;
+                    }
+                 }
+             }
+             if (!foundSubMenu) {
+                 // Fallback to root menu if submenu not found
+                 this._targetMenu = Main.panel.statusArea.aggregateMenu.menu;
+             }
         } else {
             // Fallback or error
             log("Hibernate Button: Could not find system menu");
