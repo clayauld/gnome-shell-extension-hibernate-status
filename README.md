@@ -2,9 +2,13 @@
 
 Gnome Shell extension that adds a hibernate/hybrid suspend button in Status menu.
 
+This repository is a Pop!\_OS 22.04 LTS–focused fork of the upstream project. Pop!\_OS 22.04 ships an older GNOME stack (42-based), so this fork backports the upstream functionality and ensures every feature—including the Power Off / Log Out submenu placement—works on that environment.
+
 Originally developed by [@arelange](https://github.com/arelange) and then [@p91paul](https://github.com/p91paul). Now maintained by [@slaclau](https://github.com/slaclau).
 
-Supports GNOME 45, 46, 47, and 48.
+This fork is maintained by [@clayauld](https://github.com/clayauld).
+
+Supports GNOME 45, 46, 47, and 48 upstream; this fork specifically targets Pop!\_OS 22.04 LTS (GNOME 42).
 
 ## FAQ
 
