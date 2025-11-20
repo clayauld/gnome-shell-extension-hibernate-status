@@ -219,27 +219,26 @@ class HibernateButtonExtension extends GObject.Object {
     }
 
     _updateDefaults() {
-        // console.log("Update defaults");
-        let menuItems = this.systemMenu._systemItem.menu._getMenuItems()
+        if (!this._targetMenu) return;
+
+        let menuItems = this._targetMenu._getMenuItems()
         for (let menuItem of menuItems) {
-            // console.log(menuItem.label.get_text())
-            if ( menuItem.label.get_text() === _('Suspend') ) {
-                // console.log(`Show suspend button: ${this._setting.get_boolean('show-suspend')}`)
-                menuItem.visible = this._setting.get_boolean('show-suspend');
-            }
-            if ( menuItem.label.get_text() === _('Restart…') ) {
-                // console.log(`Show restart button: ${this._setting.get_boolean('show-restart')}`)
-                menuItem.visible = this._setting.get_boolean('show-restart');
-            }
-            if ( menuItem.label.get_text() === _('Power Off…') ) {
-                // console.log(`Show shutdown button: ${this._setting.get_boolean('show-shutdown')}`)
-                menuItem.visible = this._setting.get_boolean('show-shutdown');
+            if (menuItem.label) {
+                if ( menuItem.label.get_text() === _('Suspend') ) {
+                    menuItem.visible = this._setting.get_boolean('show-suspend');
+                }
+                if ( menuItem.label.get_text() === _('Restart…') ) {
+                    menuItem.visible = this._setting.get_boolean('show-restart');
+                }
+                if ( menuItem.label.get_text() === _('Power Off…') ) {
+                    menuItem.visible = this._setting.get_boolean('show-shutdown');
+                }
             }
         }
     }
 
     _onHibernateClicked() {
-        this.systemMenu._systemItem.menu.itemActivated();
+        this._targetMenu.close();
 
         if (this._setting.get_boolean('show-hibernate-dialog')) {
             let DialogContent = {
@@ -272,7 +271,7 @@ class HibernateButtonExtension extends GObject.Object {
     }
 
     _onHybridSleepClicked() {
-        this.systemMenu._systemItem.menu.itemActivated();
+        this._targetMenu.close();
 
         if (this._setting.get_boolean('show-hybrid-sleep-dialog')) {
             let DialogContent = {
@@ -305,7 +304,7 @@ class HibernateButtonExtension extends GObject.Object {
     }
 
     _onSuspendThenHibernateClicked() {
-        this.systemMenu._systemItem.menu.itemActivated();
+        this._targetMenu.close();
 
         if (this._setting.get_boolean('show-suspend-then-hibernate-dialog')) {
             let DialogContent = {
@@ -438,12 +437,20 @@ class HibernateButtonExtension extends GObject.Object {
         this._setting = ExtensionUtils.getSettings();
         this._checkRequirements();
         this._loginManager = LoginManager.getLoginManager();
-        // GNOME 43+ uses Main.panel.statusArea.quickSettings, GNOME 42 uses Main.panel.statusArea.aggregateMenu
+
+        // Target Menu Logic
         if (Main.panel.statusArea.quickSettings) {
-            this.systemMenu = Main.panel.statusArea.quickSettings._system;
+            // GNOME 43+
+            this._targetMenu = Main.panel.statusArea.quickSettings._system._systemItem.menu;
+        } else if (Main.panel.statusArea.aggregateMenu) {
+             // GNOME 42
+            this._targetMenu = Main.panel.statusArea.aggregateMenu.menu;
         } else {
-            this.systemMenu = Main.panel.statusArea.aggregateMenu._system;
+            // Fallback or error
+            log("Hibernate Button: Could not find system menu");
+            return;
         }
+
         this._hibernateMenuItem = new PopupMenu.PopupMenuItem(_('Hibernate'));
         this._hibernateMenuItemId = this._hibernateMenuItem.connect(
             'activate',
@@ -466,23 +473,51 @@ class HibernateButtonExtension extends GObject.Object {
             () => this._onSuspendThenHibernateClicked()
         );
 
-        let afterSuspendPosition =
-            this.systemMenu._systemItem.menu.numMenuItems - 5;
+        // Find position to insert
+        let insertIndex = -1;
+        let menuItems = this._targetMenu._getMenuItems();
+        for (let i = 0; i < menuItems.length; i++) {
+            let item = menuItems[i];
+            if (item.label) {
+                 let text = item.label.get_text();
+                 if (text === _('Suspend') || text === _('Power Off…') || text === _('Restart…')) {
+                     insertIndex = i;
+                     // Insert before the first found item of this group?
+                     // Usually we want: Suspend, Hibernate, Hybrid, Power Off
+                     // If we find 'Suspend', we want to be after it?
+                     // Or if we find 'Power Off', we want to be before it?
+                     // The original code used `numMenuItems - 5`.
 
-        this.systemMenu._systemItem.menu.addMenuItem(
+                     // Let's try to place it *after* Suspend if found, otherwise *before* Power Off.
+                     if (text === _('Suspend')) {
+                         insertIndex = i + 1;
+                     }
+                     // If we find Power Off and haven't found Suspend (or want to group),
+                     // typically Suspend is above Power Off.
+                 }
+            }
+        }
+
+        // If we didn't find a specific anchor, just append? Or put at the end?
+        // In aggregateMenu, "Power Off / Logout" is usually near the end.
+        if (insertIndex === -1) {
+            insertIndex = Math.max(0, menuItems.length - 1);
+        }
+
+        this._targetMenu.addMenuItem(
             this._hybridSleepMenuItem,
-            afterSuspendPosition
+            insertIndex
         );
-        this.systemMenu._systemItem.menu.addMenuItem(
+        this._targetMenu.addMenuItem(
             this._hibernateMenuItem,
-            afterSuspendPosition
+            insertIndex
         );
-        this.systemMenu._systemItem.menu.addMenuItem(
+        this._targetMenu.addMenuItem(
             this._suspendThenHibernateMenuItem,
-            afterSuspendPosition
+            insertIndex
         );
 
-        this._menuOpenStateChangedId = this.systemMenu._systemItem.menu.connect(
+        this._menuOpenStateChangedId = this._targetMenu.connect(
             'open-state-changed',
             (menu, open) => {
                 if (!open) return;
@@ -496,8 +531,8 @@ class HibernateButtonExtension extends GObject.Object {
 
     _queueModifySystemItem() {
         this.sourceId = GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
-            let systemMenuExists = (Main.panel.statusArea.quickSettings && Main.panel.statusArea.quickSettings._system) ||
-                                   (Main.panel.statusArea.aggregateMenu && Main.panel.statusArea.aggregateMenu._system);
+            let systemMenuExists = (Main.panel.statusArea.quickSettings) ||
+                                   (Main.panel.statusArea.aggregateMenu);
 
             if (!systemMenuExists)
                 return GLib.SOURCE_CONTINUE;
@@ -508,8 +543,8 @@ class HibernateButtonExtension extends GObject.Object {
     }
 
     enable() {
-        let systemMenuExists = (Main.panel.statusArea.quickSettings && Main.panel.statusArea.quickSettings._system) ||
-                               (Main.panel.statusArea.aggregateMenu && Main.panel.statusArea.aggregateMenu._system);
+        let systemMenuExists = (Main.panel.statusArea.quickSettings) ||
+                               (Main.panel.statusArea.aggregateMenu);
 
         if (!systemMenuExists) {
             this._queueModifySystemItem();
@@ -521,7 +556,7 @@ class HibernateButtonExtension extends GObject.Object {
     disable() {
         this._setting = null;
         if (this._menuOpenStateChangedId) {
-            this.systemMenu._systemItem.menu.disconnect(
+            this._targetMenu.disconnect(
                 this._menuOpenStateChangedId
             );
             this._menuOpenStateChangedId = 0;
