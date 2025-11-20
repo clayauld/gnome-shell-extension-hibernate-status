@@ -1,31 +1,33 @@
-import Gio from 'gi://Gio';
-import GLib from 'gi://GLib';
-import GObject from 'gi://GObject';
-import St from 'gi://St';
-import Clutter from 'gi://Clutter';
+const Gio = imports.gi.Gio;
+const GLib = imports.gi.GLib;
+const GObject = imports.gi.GObject;
+const St = imports.gi.St;
+const Clutter = imports.gi.Clutter;
 
-import * as LoginManager from 'resource:///org/gnome/shell/misc/loginManager.js';
-import * as Main from 'resource:///org/gnome/shell/ui/main.js';
-import * as StatusSystem from 'resource:///org/gnome/shell/ui/status/system.js';
-import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
-import * as ExtensionSystem from 'resource:///org/gnome/shell/ui/extensionSystem.js';
-import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
-import * as Dialog from 'resource:///org/gnome/shell/ui/dialog.js';
-import * as CheckBoxImport from 'resource:///org/gnome/shell/ui/checkBox.js';
-import {loadInterfaceXML} from 'resource:///org/gnome/shell/misc/fileUtils.js';
+const LoginManager = imports.misc.loginManager;
+const Main = imports.ui.main;
+const PopupMenu = imports.ui.popupMenu;
+const ModalDialog = imports.ui.modalDialog;
+const Dialog = imports.ui.dialog;
+const CheckBoxImport = imports.ui.checkBox;
+const ExtensionUtils = imports.misc.extensionUtils;
+const Gettext = imports.gettext;
 
 const CheckBox = CheckBoxImport.CheckBox;
-// Use __ () and N__() for the extension gettext domain, and reuse
-// the shell domain with the default _() and N_()
-import {Extension, gettext as __} from 'resource:///org/gnome/shell/extensions/extension.js';
-export {__};
-const N__ = function (e) {
-    return e;
-};
+
+const Me = ExtensionUtils.getCurrentExtension();
+const GETTEXT_DOMAIN = Me.metadata['gettext-domain'] || 'hibernate-status-button';
+const SETTINGS_SCHEMA = 'org.gnome.shell.extensions.hibernate-status-button';
+const ExtensionDomain = Gettext.domain(GETTEXT_DOMAIN);
+const __ = ExtensionDomain.gettext;
+const N__ = ExtensionDomain.ngettext;
+const C_ = ExtensionDomain.pgettext;
+const ShellDomain = Gettext.domain('gnome-shell');
+const _ = ShellDomain.gettext;
 
 const HIBERNATE_CHECK_TIMEOUT = 20000;
 
-export default class HibernateButtonExtension extends Extension {
+class HibernateButtonExtension {
     _loginManagerCanHibernate(asyncCallback) {
         if (this._loginManager._proxy) {
             // systemd path
@@ -522,8 +524,16 @@ export default class HibernateButtonExtension extends Extension {
         }
     }
 
+    _errorWritable(key) {
+        return "The key '" + key + "' is not writable.";
+    }
+
+    _errorSet(key) {
+        return "Couldn't set the key '" + key + "'";
+    }
+
     _modifySystemItem() {
-        this._setting = this.getSettings()
+        this._setting = ExtensionUtils.getSettings(SETTINGS_SCHEMA);
         this._checkRequirements();
         this._loginManager = LoginManager.getLoginManager();
         if (!this._menu && !this._initMenuContext()) {
@@ -739,4 +749,9 @@ var ConfirmDialog = GObject.registerClass(
 );
 
 const _DIALOG_ICON_SIZE = 32;
+
+function init() {
+    ExtensionUtils.initTranslations(GETTEXT_DOMAIN);
+    return new HibernateButtonExtension();
+}
 
