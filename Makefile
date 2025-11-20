@@ -51,8 +51,7 @@ install-local: _build
 	mkdir -p $(INSTALLBASE)/$(INSTALLNAME)
 	cp -r ./_build/* $(INSTALLBASE)/$(INSTALLNAME)/
 ifeq ($(INSTALLTYPE),system)
-	# system-wide settings and locale files
-	rm -r $(INSTALLBASE)/$(INSTALLNAME)/schemas
+	# system-wide locale files (schemas remain in the extension to keep preferences working even if schemas aren't recompiled)
 	rm -r $(INSTALLBASE)/$(INSTALLNAME)/locale
 	mkdir -p $(SHARE_PREFIX)/glib-2.0/schemas $(SHARE_PREFIX)/locale
 	cp -r ./schemas/*gschema.* $(SHARE_PREFIX)/glib-2.0/schemas
