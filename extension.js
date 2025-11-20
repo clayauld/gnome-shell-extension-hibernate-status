@@ -1,31 +1,32 @@
-import Gio from 'gi://Gio';
-import GLib from 'gi://GLib';
-import GObject from 'gi://GObject';
-import St from 'gi://St';
-import Clutter from 'gi://Clutter';
+const Gio = imports.gi.Gio;
+const GLib = imports.gi.GLib;
+const GObject = imports.gi.GObject;
+const St = imports.gi.St;
+const Clutter = imports.gi.Clutter;
 
-import * as LoginManager from 'resource:///org/gnome/shell/misc/loginManager.js';
-import * as Main from 'resource:///org/gnome/shell/ui/main.js';
-import * as StatusSystem from 'resource:///org/gnome/shell/ui/status/system.js';
-import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
-import * as ExtensionSystem from 'resource:///org/gnome/shell/ui/extensionSystem.js';
-import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
-import * as Dialog from 'resource:///org/gnome/shell/ui/dialog.js';
-import * as CheckBoxImport from 'resource:///org/gnome/shell/ui/checkBox.js';
-import {loadInterfaceXML} from 'resource:///org/gnome/shell/misc/fileUtils.js';
+const LoginManager = imports.misc.loginManager;
+const Main = imports.ui.main;
+const PopupMenu = imports.ui.popupMenu;
+const ModalDialog = imports.ui.modalDialog;
+const Dialog = imports.ui.dialog;
+const CheckBox = imports.ui.checkBox.CheckBox;
 
-const CheckBox = CheckBoxImport.CheckBox;
-// Use __ () and N__() for the extension gettext domain, and reuse
-// the shell domain with the default _() and N_()
-import {Extension, gettext as __} from 'resource:///org/gnome/shell/extensions/extension.js';
-export {__};
-const N__ = function (e) {
-    return e;
-};
+const ExtensionUtils = imports.misc.extensionUtils;
+const Me = ExtensionUtils.getCurrentExtension();
+const Gettext = imports.gettext;
+const Domain = Gettext.domain(Me.metadata['gettext-domain']);
+const _ = Domain.gettext;
+const N_ = function(e) { return e; };
+const C_ = Domain.pgettext;
 
 const HIBERNATE_CHECK_TIMEOUT = 20000;
 
-export default class HibernateButtonExtension extends Extension {
+var HibernateButtonExtension = GObject.registerClass(
+class HibernateButtonExtension extends GObject.Object {
+    _init() {
+        super._init();
+    }
+
     _loginManagerCanHibernate(asyncCallback) {
         if (this._loginManager._proxy) {
             // systemd path
@@ -49,7 +50,7 @@ export default class HibernateButtonExtension extends Extension {
                 }
             );
         } else {
-            this.can_hibernate_sourceID = GLib.idle_add(() => {
+            this.can_hibernate_sourceID = GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
                 asyncCallback(false);
                 return false;
             });
@@ -105,7 +106,7 @@ export default class HibernateButtonExtension extends Extension {
                 }
             );
         } else {
-            this.can_hybrid_sleep_sourceID = GLib.idle_add(() => {
+            this.can_hybrid_sleep_sourceID = GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
                 asyncCallback(false);
                 return false;
             });
@@ -153,7 +154,7 @@ export default class HibernateButtonExtension extends Extension {
                 }
             );
         } else {
-            this.can_suspend_then_hibernate_sourceID = GLib.idle_add(() => {
+            this.can_suspend_then_hibernate_sourceID = GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
                 asyncCallback(false);
                 return false;
             });
@@ -218,20 +219,20 @@ export default class HibernateButtonExtension extends Extension {
     }
 
     _updateDefaults() {
-        console.log("Update defaults");
+        // console.log("Update defaults");
         let menuItems = this.systemMenu._systemItem.menu._getMenuItems()
         for (let menuItem of menuItems) {
-            console.log(menuItem.label.get_text())
+            // console.log(menuItem.label.get_text())
             if ( menuItem.label.get_text() === _('Suspend') ) {
-                console.log(`Show suspend button: ${this._setting.get_boolean('show-suspend')}`)
+                // console.log(`Show suspend button: ${this._setting.get_boolean('show-suspend')}`)
                 menuItem.visible = this._setting.get_boolean('show-suspend');
             }
             if ( menuItem.label.get_text() === _('Restart…') ) {
-                console.log(`Show restart button: ${this._setting.get_boolean('show-restart')}`)
+                // console.log(`Show restart button: ${this._setting.get_boolean('show-restart')}`)
                 menuItem.visible = this._setting.get_boolean('show-restart');
             }
             if ( menuItem.label.get_text() === _('Power Off…') ) {
-                console.log(`Show shutdown button: ${this._setting.get_boolean('show-shutdown')}`)
+                // console.log(`Show shutdown button: ${this._setting.get_boolean('show-shutdown')}`)
                 menuItem.visible = this._setting.get_boolean('show-shutdown');
             }
         }
@@ -242,17 +243,17 @@ export default class HibernateButtonExtension extends Extension {
 
         if (this._setting.get_boolean('show-hibernate-dialog')) {
             let DialogContent = {
-                subject: C_('title', __('Hibernate')),
-                description: __('Do you really want to hibernate the system?'),
+                subject: C_('title', _('Hibernate')),
+                description: _('Do you really want to hibernate the system?'),
                 confirmButtons: [
                     {
                         signal: 'Cancel',
-                        label: C_('button', __('Cancel')),
+                        label: C_('button', _('Cancel')),
                         key: Clutter.Escape,
                     },
                     {
                         signal: 'Confirmed',
-                        label: C_('button', __('Hibernate')),
+                        label: C_('button', _('Hibernate')),
                         default: true,
                     },
                 ],
@@ -275,17 +276,17 @@ export default class HibernateButtonExtension extends Extension {
 
         if (this._setting.get_boolean('show-hybrid-sleep-dialog')) {
             let DialogContent = {
-                subject: C_('title', __('Hybrid Sleep')),
-                description: __('Do you really want to hybrid sleep the system?'),
+                subject: C_('title', _('Hybrid Sleep')),
+                description: _('Do you really want to hybrid sleep the system?'),
                 confirmButtons: [
                     {
                         signal: 'Cancel',
-                        label: C_('button', __('Cancel')),
+                        label: C_('button', _('Cancel')),
                         key: Clutter.Escape,
                     },
                     {
                         signal: 'Confirmed',
-                        label: C_('button', __('Hybrid Sleep')),
+                        label: C_('button', _('Hybrid Sleep')),
                         default: true,
                     },
                 ],
@@ -308,17 +309,17 @@ export default class HibernateButtonExtension extends Extension {
 
         if (this._setting.get_boolean('show-suspend-then-hibernate-dialog')) {
             let DialogContent = {
-                subject: C_('title', __('Suspend then Hibernate')),
-                description: __('Do you really want to suspend then hibernate the system?'),
+                subject: C_('title', _('Suspend then Hibernate')),
+                description: _('Do you really want to suspend then hibernate the system?'),
                 confirmButtons: [
                     {
                         signal: 'Cancel',
-                        label: C_('button', __('Cancel')),
+                        label: C_('button', _('Cancel')),
                         key: Clutter.Escape,
                     },
                     {
                         signal: 'Confirmed',
-                        label: C_('button', __('Suspend then Hibernate')),
+                        label: C_('button', _('Suspend then Hibernate')),
                         default: true,
                     },
                 ],
@@ -348,17 +349,17 @@ export default class HibernateButtonExtension extends Extension {
     _checkRequirements() {
         if (GLib.access('/run/systemd/seats', 0) < 0) {
             let SystemdMissingDialogContent = {
-                subject: C_('title', __('Hibernate button: Systemd Missing')),
-                description: __('Systemd seems to be missing and is required.'),
+                subject: C_('title', _('Hibernate button: Systemd Missing')),
+                description: _('Systemd seems to be missing and is required.'),
                 confirmButtons: [
                     {
                         signal: 'Cancel',
-                        label: C_('button', __('Cancel')),
+                        label: C_('button', _('Cancel')),
                         key: Clutter.Escape,
                     },
                     {
                         signal: 'DisableExtension',
-                        label: C_('button', __('Disable Extension')),
+                        label: C_('button', _('Disable Extension')),
                         default: true,
                     },
                 ],
@@ -389,23 +390,23 @@ export default class HibernateButtonExtension extends Extension {
         // hibernate failed
 
         let HibernateFailedDialogContent = {
-            subject: C_('title', __('Hibernate button: Hibernate failed')),
-            description: __(
+            subject: C_('title', _('Hibernate button: Hibernate failed')),
+            description: _(
                 'Looks like hibernation failed. On some linux distributions hibernation is disabled ' +
                     'because not all hardware supports it well; ' +
                     'please check your distribution documentation ' +
                     'on how to enable it.'
             ),
-            checkBox: __("You are wrong, don't check this anymore!"),
+            checkBox: _("You are wrong, don't check this anymore!"),
             confirmButtons: [
                 {
                     signal: 'Cancel',
-                    label: C_('button', __('Cancel')),
+                    label: C_('button', _('Cancel')),
                     key: Clutter.Escape,
                 },
                 {
                     signal: 'DisableExtension',
-                    label: C_('button', __('Disable Extension')),
+                    label: C_('button', _('Disable Extension')),
                     default: true,
                 },
             ],
@@ -434,18 +435,23 @@ export default class HibernateButtonExtension extends Extension {
     }
 
     _modifySystemItem() {
-        this._setting = this.getSettings()
+        this._setting = ExtensionUtils.getSettings();
         this._checkRequirements();
         this._loginManager = LoginManager.getLoginManager();
-        this.systemMenu = Main.panel.statusArea.quickSettings._system;
-        this._hibernateMenuItem = new PopupMenu.PopupMenuItem(__('Hibernate'));
+        // GNOME 43+ uses Main.panel.statusArea.quickSettings, GNOME 42 uses Main.panel.statusArea.aggregateMenu
+        if (Main.panel.statusArea.quickSettings) {
+            this.systemMenu = Main.panel.statusArea.quickSettings._system;
+        } else {
+            this.systemMenu = Main.panel.statusArea.aggregateMenu._system;
+        }
+        this._hibernateMenuItem = new PopupMenu.PopupMenuItem(_('Hibernate'));
         this._hibernateMenuItemId = this._hibernateMenuItem.connect(
             'activate',
             () => this._onHibernateClicked()
         );
 
         this._hybridSleepMenuItem = new PopupMenu.PopupMenuItem(
-            __('Hybrid Sleep')
+            _('Hybrid Sleep')
         );
         this._hybridSleepMenuItemId = this._hybridSleepMenuItem.connect(
             'activate',
@@ -453,7 +459,7 @@ export default class HibernateButtonExtension extends Extension {
         );
 
         this._suspendThenHibernateMenuItem = new PopupMenu.PopupMenuItem(
-            __('Suspend then Hibernate')
+            _('Suspend then Hibernate')
         );
         this._suspendThenHibernateMenuItemId = this._suspendThenHibernateMenuItem.connect(
             'activate',
@@ -490,7 +496,10 @@ export default class HibernateButtonExtension extends Extension {
 
     _queueModifySystemItem() {
         this.sourceId = GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
-            if (!Main.panel.statusArea.quickSettings._system)
+            let systemMenuExists = (Main.panel.statusArea.quickSettings && Main.panel.statusArea.quickSettings._system) ||
+                                   (Main.panel.statusArea.aggregateMenu && Main.panel.statusArea.aggregateMenu._system);
+
+            if (!systemMenuExists)
                 return GLib.SOURCE_CONTINUE;
 
             this._modifySystemItem();
@@ -499,7 +508,10 @@ export default class HibernateButtonExtension extends Extension {
     }
 
     enable() {
-        if (!Main.panel.statusArea.quickSettings._system) {
+        let systemMenuExists = (Main.panel.statusArea.quickSettings && Main.panel.statusArea.quickSettings._system) ||
+                               (Main.panel.statusArea.aggregateMenu && Main.panel.statusArea.aggregateMenu._system);
+
+        if (!systemMenuExists) {
             this._queueModifySystemItem();
         } else {
             this._modifySystemItem();
@@ -570,7 +582,9 @@ export default class HibernateButtonExtension extends Extension {
             this.hibernate_sourceID = null;
         }
     };
-}
+});
+
+const _DIALOG_ICON_SIZE = 32;
 
 var ConfirmDialog = GObject.registerClass(
     {
@@ -642,5 +656,6 @@ var ConfirmDialog = GObject.registerClass(
     }
 );
 
-const _DIALOG_ICON_SIZE = 32;
-
+function init() {
+    return new HibernateButtonExtension();
+}
