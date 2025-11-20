@@ -10,6 +10,49 @@ This fork is maintained by [@clayauld](https://github.com/clayauld).
 
 Supports GNOME 45, 46, 47, and 48 upstream; this fork specifically targets Pop!\_OS 22.04 LTS (GNOME 42).
 
+## Install from source
+
+1. Ensure build prerequisites are installed (`git`, `make`, `glib-compile-schemas`, and `msgfmt` from `gettext`).
+2. Clone and build:
+
+       git clone https://github.com/clayauld/gnome-shell-extension-hibernate-status.git
+       cd gnome-shell-extension-hibernate-status
+       make
+
+3. Install for just your user:
+
+       make install
+
+   This places the extension in `~/.local/share/gnome-shell/extensions/hibernate-status@dromi`.
+
+4. (Optional) Install system-wide instead:
+
+       sudo make DESTDIR=/ install
+       sudo glib-compile-schemas /usr/share/glib-2.0/schemas
+
+   This copies the schema to `/usr/share/glib-2.0/schemas` (and recompiles it so GNOME sees the new keys) plus locales under `/usr/share/locale`.
+
+5. Restart GNOME Shell (`Alt`+`F2`, enter `r`) or log out/in, then enable the extension via GNOME Extensions.
+
+## Uninstall
+
+### Remove local install
+
+If you installed with `make install`, remove the extension directory and restart GNOME Shell:
+
+    rm -rf ~/.local/share/gnome-shell/extensions/hibernate-status@dromi
+
+### Remove system-wide install
+
+If you installed via `sudo make DESTDIR=/ install`, remove the files placed in `/usr/share` and recompile schemas:
+
+    sudo rm -rf /usr/share/gnome-shell/extensions/hibernate-status@dromi
+    sudo rm -f /usr/share/locale/*/LC_MESSAGES/hibernate-status-button.mo
+    sudo rm -f /usr/share/glib-2.0/schemas/org.gnome.shell.extensions.hibernate-status-button.gschema.xml
+    sudo glib-compile-schemas /usr/share/glib-2.0/schemas
+
+After uninstalling (local or system-wide), restart GNOME Shell (`Alt`+`F2`, `r`) or log out/in to finish cleanup.
+
 ## FAQ
 
 ### Hibernation does not work
